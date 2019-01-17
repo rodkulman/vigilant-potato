@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -47,14 +48,33 @@ namespace Rodkulman.RedditReader
                             {
                                 var permalink = post["permalink"].Value<string>();
 
-                                Process.Start($"https://www.reddit.com/{permalink}");
+                                OpenUrl($"https://www.reddit.com{permalink}");
                             }
                         }
                     }
                 }
 
                 await Task.Delay(TimeSpan.FromMinutes(1));
-            }            
+            }
+        }
+
+        // https://brockallen.com/2016/09/24/process-start-for-urls-on-net-core/
+        private static void OpenUrl(string url)
+        {
+            // hack because of this: https://github.com/dotnet/corefx/issues/10361
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                url = url.Replace("&", "^&");
+                Process.Start(new ProcessStartInfo("cmd", $"/c start {url}") { CreateNoWindow = true });
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                Process.Start("xdg-open", url);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                Process.Start("open", url);
+            }
         }
 
         private static IEnumerable<SubredditWatch> GetWatches()
@@ -98,7 +118,7 @@ namespace Rodkulman.RedditReader
                 var data = JObject.Parse(response.Content);
 
                 accessToken = data.Value<string>("access_token");
-                accessTokenExpiration = DateTime.Now.AddSeconds(data.Value<int>());
+                accessTokenExpiration = DateTime.Now.AddSeconds(data.Value<int>("expires_in"));
 
                 return accessToken;
             }
